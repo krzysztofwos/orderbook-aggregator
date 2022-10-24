@@ -62,6 +62,14 @@ struct Args {
     /// Port to listen on
     #[arg(long, default_value_t = 50051)]
     port: u16,
+
+    /// Binance symbol
+    #[arg(long, default_value = "BTCUSDT")]
+    binance_symbol: String,
+
+    /// Binance WebSocket URL
+    #[arg(long, default_value = "wss://stream.binance.com:9443/ws")]
+    binance_websocket_url: String,
 }
 
 #[tokio::main]
