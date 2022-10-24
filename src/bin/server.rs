@@ -2,7 +2,7 @@ pub mod orderbook {
     tonic::include_proto!("orderbook");
 }
 
-use std::{pin::Pin, time::Duration};
+use std::pin::Pin;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
@@ -12,7 +12,7 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 
 use orderbook::{
@@ -27,8 +27,10 @@ use orderbook_aggregator::{
     types::OrderbookUpdate,
 };
 
-#[derive(Debug, Default)]
-pub struct OrderbookAggregator {}
+#[derive(Debug)]
+pub struct OrderbookAggregator {
+    summary_broadcast_tx: broadcast::Sender<Summary>,
+}
 
 #[tonic::async_trait]
 impl orderbook_aggregator_server::OrderbookAggregator for OrderbookAggregator {
@@ -38,21 +40,15 @@ impl orderbook_aggregator_server::OrderbookAggregator for OrderbookAggregator {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
-        let repeat = std::iter::repeat(Summary {
-            spread: f64::NAN,
-            bids: vec![],
-            asks: vec![],
-        });
-        let mut stream = Box::pin(tokio_stream::iter(repeat).throttle(Duration::from_millis(200)));
+        let mut summary_broadcast_rx = self.summary_broadcast_tx.subscribe();
+        // FIXME: Is it possible to avoid the extra channel here?
         let (tx, rx) = mpsc::channel(128);
         tokio::spawn(async move {
-            while let Some(item) = stream.next().await {
-                match tx.send(Result::<_, Status>::Ok(item)).await {
-                    Ok(_) => {}
-                    Err(_item) => {
-                        break;
-                    }
-                }
+            loop {
+                let summary = summary_broadcast_rx.recv().await.unwrap(); // FIXME
+                tx.send(Ok(summary)) // FIXME: Use `try_send` to prevent broadcast receiver from falling behind?
+                    .await
+                    .expect("receive half of the output channel is closed"); // FIXME
             }
         });
         let output_stream = ReceiverStream::new(rx);
@@ -197,21 +193,16 @@ async fn main() -> Result<()> {
         spawn_binance_orderbook_listener(&args, orderbook_updates_tx.clone());
     let _bitstamp_orderbook_listener_join_handle =
         spawn_bitstamp_orderbook_listener(&args, orderbook_updates_tx.clone());
-    let (summary_broadcast_tx, mut summary_broadcast_rx) =
+    let (summary_broadcast_tx, _summary_broadcast_rx) =
         broadcast::channel(args.summary_broadcast_channel_capacity);
     let _summary_publisher_join_handle = spawn_summary_publisher(
         orderbook_updates_rx,
-        summary_broadcast_tx,
+        summary_broadcast_tx.clone(),
         args.orderbook_depth_limit,
     );
-    tokio::spawn({
-        async move {
-            while let Ok(summary) = summary_broadcast_rx.recv().await {
-                println!("{:?}", summary);
-            }
-        }
-    });
-    let orderbook_aggregator = OrderbookAggregator::default();
+    let orderbook_aggregator = OrderbookAggregator {
+        summary_broadcast_tx: summary_broadcast_tx.clone(),
+    };
     Server::builder()
         .add_service(OrderbookAggregatorServer::new(orderbook_aggregator))
         .serve(addr)
