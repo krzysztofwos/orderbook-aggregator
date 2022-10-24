@@ -4,6 +4,7 @@ pub mod orderbook {
 
 use std::{pin::Pin, time::Duration};
 
+use anyhow::Result;
 use clap::Parser;
 use futures::Stream;
 use tokio::sync::mpsc;
@@ -64,7 +65,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let args = Args::parse();
     let addr = format!("{}:{}", args.address, args.port).parse()?;
     let orderbook_aggregator = OrderbookAggregator::default();

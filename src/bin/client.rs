@@ -2,6 +2,7 @@ pub mod orderbook {
     tonic::include_proto!("orderbook");
 }
 
+use anyhow::Result;
 use clap::Parser;
 use tokio_stream::StreamExt;
 
@@ -17,13 +18,13 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let args = Args::parse();
-    let mut client = OrderbookAggregatorClient::connect(args.url).await.unwrap();
-    let mut stream = client.book_summary(Empty {}).await.unwrap().into_inner();
+    let mut client = OrderbookAggregatorClient::connect(args.url).await?;
+    let mut stream = client.book_summary(Empty {}).await?.into_inner();
 
     while let Some(item) = stream.next().await {
-        println!("{:?}", item.unwrap());
+        println!("{:?}", item?);
     }
 
     Ok(())
