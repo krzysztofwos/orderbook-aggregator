@@ -80,6 +80,14 @@ struct Args {
     /// Binance WebSocket URL
     #[arg(long, default_value = "wss://stream.binance.com:9443/ws")]
     binance_websocket_url: String,
+
+    /// Bitstamp symbol
+    #[arg(long, default_value = "BTCUSDT")]
+    bitstamp_symbol: String,
+
+    /// Bitstamp WebSocket URL
+    #[arg(long, default_value = "wss://ws.bitstamp.net")]
+    bitstamp_websocket_url: String,
 }
 
 fn spawn_binance_orderbook_listener(
