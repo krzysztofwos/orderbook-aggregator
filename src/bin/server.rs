@@ -4,6 +4,7 @@ pub mod orderbook {
 
 use std::{pin::Pin, time::Duration};
 
+use clap::Parser;
 use futures::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
@@ -49,9 +50,23 @@ impl orderbook_aggregator_server::OrderbookAggregator for OrderbookAggregator {
     }
 }
 
+/// Orderbook Aggregator Server
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Address to listen on
+    #[arg(long, default_value = "0.0.0.0")]
+    address: String,
+
+    /// Port to listen on
+    #[arg(long, default_value_t = 50051)]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "0.0.0.0:50051".parse()?;
+    let args = Args::parse();
+    let addr = format!("{}:{}", args.address, args.port).parse()?;
     let orderbook_aggregator = OrderbookAggregator::default();
     Server::builder()
         .add_service(OrderbookAggregatorServer::new(orderbook_aggregator))
