@@ -191,16 +191,23 @@ fn spawn_summary_publisher(
 async fn main() -> Result<()> {
     let args = Args::parse();
     let addr = format!("{}:{}", args.address, args.port).parse()?;
-    let (orderbook_updates_tx, mut orderbook_updates_rx) =
+    let (orderbook_updates_tx, orderbook_updates_rx) =
         mpsc::channel(args.orderbook_listener_channel_capacity);
     let _binance_orderbook_listener_join_handle =
         spawn_binance_orderbook_listener(&args, orderbook_updates_tx.clone());
     let _bitstamp_orderbook_listener_join_handle =
         spawn_bitstamp_orderbook_listener(&args, orderbook_updates_tx.clone());
+    let (summary_broadcast_tx, mut summary_broadcast_rx) =
+        broadcast::channel(args.summary_broadcast_channel_capacity);
+    let _summary_publisher_join_handle = spawn_summary_publisher(
+        orderbook_updates_rx,
+        summary_broadcast_tx,
+        args.orderbook_depth_limit,
+    );
     tokio::spawn({
         async move {
-            while let Some(orderbook_update) = orderbook_updates_rx.recv().await {
-                println!("{:?}", orderbook_update);
+            while let Ok(summary) = summary_broadcast_rx.recv().await {
+                println!("{:?}", summary);
             }
         }
     });
