@@ -16,7 +16,10 @@ use orderbook::{
     Empty, Summary,
 };
 
-use orderbook_aggregator::{binance::binance_orderbook_listener, types::OrderbookUpdate};
+use orderbook_aggregator::{
+    binance::binance_orderbook_listener, bitstamp::bitstamp_orderbook_listener,
+    types::OrderbookUpdate,
+};
 
 #[derive(Debug, Default)]
 pub struct OrderbookAggregator {}
@@ -104,6 +107,20 @@ fn spawn_binance_orderbook_listener(
     })
 }
 
+fn spawn_bitstamp_orderbook_listener(
+    args: &Args,
+    tx: mpsc::Sender<OrderbookUpdate>,
+) -> JoinHandle<Result<()>> {
+    tokio::spawn({
+        let websocket_url = args.bitstamp_websocket_url.clone();
+        let symbol = args.bitstamp_symbol.clone();
+        let orderbook_depth_limit = args.orderbook_depth_limit;
+        async move {
+            bitstamp_orderbook_listener(&websocket_url, &symbol, orderbook_depth_limit, tx).await
+        }
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -112,6 +129,8 @@ async fn main() -> Result<()> {
         mpsc::channel(args.orderbook_listener_channel_capacity);
     let _binance_orderbook_listener_join_handle =
         spawn_binance_orderbook_listener(&args, orderbook_updates_tx.clone());
+    let _bitstamp_orderbook_listener_join_handle =
+        spawn_bitstamp_orderbook_listener(&args, orderbook_updates_tx.clone());
     tokio::spawn({
         async move {
             while let Some(orderbook_update) = orderbook_updates_rx.recv().await {
