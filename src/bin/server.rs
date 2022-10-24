@@ -4,20 +4,26 @@ pub mod orderbook {
 
 use std::{pin::Pin, time::Duration};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::Stream;
-use tokio::{sync::mpsc, task::JoinHandle};
+use rust_decimal::prelude::ToPrimitive;
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+};
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{transport::Server, Request, Response, Status};
 
 use orderbook::{
     orderbook_aggregator_server::{self, OrderbookAggregatorServer},
-    Empty, Summary,
+    Empty, Level, Summary,
 };
 
 use orderbook_aggregator::{
-    binance::binance_orderbook_listener, bitstamp::bitstamp_orderbook_listener,
+    binance::binance_orderbook_listener,
+    bitstamp::bitstamp_orderbook_listener,
+    combined_orderbook::{CombinedOrderbook, CombinedOrderbookLevel},
     types::OrderbookUpdate,
 };
 
@@ -76,6 +82,10 @@ struct Args {
     #[arg(long, default_value_t = 128)]
     orderbook_listener_channel_capacity: usize,
 
+    /// Summary broadcast channel capacity
+    #[arg(long, default_value_t = 128)]
+    summary_broadcast_channel_capacity: usize,
+
     /// Binance symbol
     #[arg(long, default_value = "BTCUSDT")]
     binance_symbol: String,
@@ -117,6 +127,62 @@ fn spawn_bitstamp_orderbook_listener(
         let orderbook_depth_limit = args.orderbook_depth_limit;
         async move {
             bitstamp_orderbook_listener(&websocket_url, &symbol, orderbook_depth_limit, tx).await
+        }
+    })
+}
+
+fn to_level(combined_orderbook_level: &CombinedOrderbookLevel) -> Result<Level> {
+    let (exchange, price, amount) = combined_orderbook_level;
+    Ok(Level {
+        exchange: exchange.clone(),
+        price: price
+            .to_f64()
+            .ok_or_else(|| anyhow!("value '{}' cannot be represented by an f64", price))?,
+        amount: amount
+            .to_f64()
+            .ok_or_else(|| anyhow!("value '{}' cannot be represented by an f64", amount))?,
+    })
+}
+
+fn to_summary(combined_orderbook: &CombinedOrderbook) -> Result<Summary> {
+    let spread = match combined_orderbook.spread() {
+        Some(spread) => spread
+            .to_f64()
+            .ok_or_else(|| anyhow!("value '{}' cannot be represented by an f64", spread))?,
+        None => f64::NAN,
+    };
+    let mut bids = vec![];
+    bids.reserve(combined_orderbook.bids().len());
+
+    for bid in combined_orderbook.bids() {
+        bids.push(to_level(bid)?);
+    }
+
+    let mut asks = vec![];
+    asks.reserve(combined_orderbook.asks().len());
+
+    for ask in combined_orderbook.asks() {
+        asks.push(to_level(ask)?);
+    }
+
+    Ok(Summary { spread, bids, asks })
+}
+
+fn spawn_summary_publisher(
+    mut orderbook_updates_rx: mpsc::Receiver<OrderbookUpdate>,
+    summary_broadcast_tx: broadcast::Sender<Summary>,
+    orderbook_depth_limit: usize,
+) -> JoinHandle<Result<()>> {
+    let mut combined_orderbook = CombinedOrderbook::new(orderbook_depth_limit);
+    tokio::spawn({
+        async move {
+            while let Some(orderbook_update) = orderbook_updates_rx.recv().await {
+                combined_orderbook.update(orderbook_update);
+                let summary = to_summary(&combined_orderbook)?; // FIXME
+                summary_broadcast_tx.send(summary)?; // FIXME
+            }
+
+            Ok(())
         }
     })
 }
