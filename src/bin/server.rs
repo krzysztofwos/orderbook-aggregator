@@ -189,13 +189,13 @@ async fn main() -> Result<()> {
     let addr = format!("{}:{}", args.address, args.port).parse()?;
     let (orderbook_updates_tx, orderbook_updates_rx) =
         mpsc::channel(args.orderbook_listener_channel_capacity);
-    let _binance_orderbook_listener_join_handle =
+    let mut binance_orderbook_listener_join_handle =
         spawn_binance_orderbook_listener(&args, orderbook_updates_tx.clone());
-    let _bitstamp_orderbook_listener_join_handle =
+    let mut bitstamp_orderbook_listener_join_handle =
         spawn_bitstamp_orderbook_listener(&args, orderbook_updates_tx.clone());
     let (summary_broadcast_tx, _summary_broadcast_rx) =
         broadcast::channel(args.summary_broadcast_channel_capacity);
-    let _summary_publisher_join_handle = spawn_summary_publisher(
+    let mut summary_publisher_join_handle = spawn_summary_publisher(
         orderbook_updates_rx,
         summary_broadcast_tx.clone(),
         args.orderbook_depth_limit,
@@ -203,9 +203,24 @@ async fn main() -> Result<()> {
     let orderbook_aggregator = OrderbookAggregator {
         summary_broadcast_tx: summary_broadcast_tx.clone(),
     };
-    Server::builder()
-        .add_service(OrderbookAggregatorServer::new(orderbook_aggregator))
-        .serve(addr)
-        .await?;
-    Ok(())
+    let mut orderbook_aggregator_server_join_handle = tokio::spawn(async move {
+        Server::builder()
+            .add_service(OrderbookAggregatorServer::new(orderbook_aggregator))
+            .serve(addr)
+            .await
+    });
+    tokio::select! {
+        result = &mut binance_orderbook_listener_join_handle => {
+            result?
+        }
+        result = &mut bitstamp_orderbook_listener_join_handle => {
+            result?
+        }
+        result = &mut summary_publisher_join_handle => {
+            result?
+        }
+        result = &mut orderbook_aggregator_server_join_handle => {
+            result?.map_err(|e| anyhow!(e))
+        }
+    }
 }
