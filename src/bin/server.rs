@@ -4,7 +4,7 @@ pub mod orderbook {
 
 use std::pin::Pin;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use futures::Stream;
 use rust_decimal::prelude::ToPrimitive;
@@ -108,7 +108,9 @@ fn spawn_binance_orderbook_listener(
         let symbol = args.binance_symbol.clone();
         let orderbook_depth_limit = args.orderbook_depth_limit;
         async move {
-            binance_orderbook_listener(&websocket_url, &symbol, orderbook_depth_limit, tx).await
+            binance_orderbook_listener(&websocket_url, &symbol, orderbook_depth_limit, tx)
+                .await
+                .context("Binance orderbook listener error")
         }
     })
 }
@@ -122,7 +124,9 @@ fn spawn_bitstamp_orderbook_listener(
         let symbol = args.bitstamp_symbol.clone();
         let orderbook_depth_limit = args.orderbook_depth_limit;
         async move {
-            bitstamp_orderbook_listener(&websocket_url, &symbol, orderbook_depth_limit, tx).await
+            bitstamp_orderbook_listener(&websocket_url, &symbol, orderbook_depth_limit, tx)
+                .await
+                .context("Bitstamp orderbook listener error")
         }
     })
 }
@@ -208,6 +212,7 @@ async fn main() -> Result<()> {
             .add_service(OrderbookAggregatorServer::new(orderbook_aggregator))
             .serve(addr)
             .await
+            .context("Orderbook aggregator server error")
     });
     tokio::select! {
         result = &mut binance_orderbook_listener_join_handle => {
