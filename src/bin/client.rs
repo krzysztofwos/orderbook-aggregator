@@ -1,12 +1,10 @@
-pub mod orderbook {
-    tonic::include_proto!("orderbook");
-}
-
 use anyhow::Result;
 use clap::Parser;
 use tokio_stream::StreamExt;
 
-use orderbook::{orderbook_aggregator_client::OrderbookAggregatorClient, Empty};
+use orderbook_aggregator::orderbook::{
+    orderbook_aggregator_client::OrderbookAggregatorClient, Empty,
+};
 
 /// Orderbook Aggregator Client
 #[derive(Parser, Debug)]

@@ -1,7 +1,3 @@
-pub mod orderbook {
-    tonic::include_proto!("orderbook");
-}
-
 use std::pin::Pin;
 
 use anyhow::{anyhow, Context, Result};
@@ -15,7 +11,7 @@ use tokio::{
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 
-use orderbook::{
+use orderbook_aggregator::orderbook::{
     orderbook_aggregator_server::{self, OrderbookAggregatorServer},
     Empty, Level, Summary,
 };
