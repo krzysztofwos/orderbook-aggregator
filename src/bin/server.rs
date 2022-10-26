@@ -42,9 +42,14 @@ impl orderbook_aggregator_server::OrderbookAggregator for OrderbookAggregator {
         tokio::spawn(async move {
             loop {
                 let summary = summary_broadcast_rx.recv().await.unwrap(); // FIXME
-                tx.send(Ok(summary)) // FIXME: Use `try_send` to prevent broadcast receiver from falling behind?
-                    .await
-                    .expect("receive half of the output channel is closed"); // FIXME
+
+                // FIXME: Use `try_send` to prevent broadcast receiver from falling behind?
+                match tx.send(Ok(summary)).await {
+                    Ok(_) => {}
+                    Err(_item) => {
+                        break;
+                    }
+                }
             }
         });
         let output_stream = ReceiverStream::new(rx);
