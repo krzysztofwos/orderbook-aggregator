@@ -75,3 +75,34 @@ impl CombinedOrderbook {
         self.spread
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rust_decimal_macros::dec;
+
+    use super::*;
+
+    #[test]
+    fn update_best_bid() {
+        let mut combined_orderbook = CombinedOrderbook::new(1);
+        combined_orderbook.update(("binance".to_string(), vec![(dec!(90), dec!(100))], vec![]));
+        combined_orderbook.update(("bitstamp".to_string(), vec![(dec!(89), dec!(100))], vec![]));
+        combined_orderbook.update(("binance".to_string(), vec![(dec!(87), dec!(100))], vec![]));
+        assert_eq!(
+            combined_orderbook.bids(),
+            [("bitstamp".to_string(), dec!(89), dec!(100))]
+        );
+    }
+
+    #[test]
+    fn update_best_ask() {
+        let mut combined_orderbook = CombinedOrderbook::new(1);
+        combined_orderbook.update(("binance".to_string(), vec![], vec![(dec!(90), dec!(100))]));
+        combined_orderbook.update(("bitstamp".to_string(), vec![], vec![(dec!(91), dec!(100))]));
+        combined_orderbook.update(("binance".to_string(), vec![], vec![(dec!(92), dec!(100))]));
+        assert_eq!(
+            combined_orderbook.asks(),
+            [("bitstamp".to_string(), dec!(91), dec!(100))]
+        );
+    }
+}
