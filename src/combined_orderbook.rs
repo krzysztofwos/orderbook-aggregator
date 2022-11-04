@@ -7,7 +7,6 @@ fn update_side<F>(
     compare: F,
     exchange: &str,
     quotes: Vec<(Price, Quantity)>,
-    orderbook_depth_limit: usize,
 ) where
     F: FnMut(&CombinedOrderbookLevel, &CombinedOrderbookLevel) -> std::cmp::Ordering,
 {
@@ -16,7 +15,6 @@ fn update_side<F>(
         side.push((exchange.to_string(), price, quantity));
     });
     side.sort_unstable_by(compare);
-    side.truncate(orderbook_depth_limit);
 }
 
 pub struct CombinedOrderbook {
@@ -37,11 +35,11 @@ impl CombinedOrderbook {
     }
 
     pub fn bids(&self) -> &[(String, Price, Quantity)] {
-        &self.bids
+        &self.bids[..self.orderbook_depth_limit]
     }
 
     pub fn asks(&self) -> &[(String, Price, Quantity)] {
-        &self.asks
+        &self.asks[..self.orderbook_depth_limit]
     }
 
     pub fn update(&mut self, orderbook_update: OrderbookUpdate) {
@@ -51,14 +49,12 @@ impl CombinedOrderbook {
             |lhs, rhs| rhs.1.partial_cmp(&lhs.1).unwrap(), // Highest bid first
             &exchange,
             bids,
-            self.orderbook_depth_limit,
         );
         update_side(
             &mut self.asks,
             |lhs, rhs| lhs.1.partial_cmp(&rhs.1).unwrap(), // Lowest ask first
             &exchange,
             asks,
-            self.orderbook_depth_limit,
         );
         self.update_spread();
     }
