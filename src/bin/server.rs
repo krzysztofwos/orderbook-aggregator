@@ -2,13 +2,13 @@ use std::pin::Pin;
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use rust_decimal::prelude::ToPrimitive;
 use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::wrappers::BroadcastStream;
 use tonic::{transport::Server, Request, Response, Status};
 
 use orderbook_aggregator::orderbook::{
@@ -36,23 +36,9 @@ impl orderbook_aggregator_server::OrderbookAggregator for OrderbookAggregator {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
-        let mut summary_broadcast_rx = self.summary_broadcast_tx.subscribe();
-        // FIXME: Is it possible to avoid the extra channel here?
-        let (tx, rx) = mpsc::channel(128);
-        tokio::spawn(async move {
-            loop {
-                let summary = summary_broadcast_rx.recv().await.unwrap(); // FIXME
-
-                // FIXME: Use `try_send` to prevent broadcast receiver from falling behind?
-                match tx.send(Ok(summary)).await {
-                    Ok(_) => {}
-                    Err(_item) => {
-                        break;
-                    }
-                }
-            }
-        });
-        let output_stream = ReceiverStream::new(rx);
+        let summary_broadcast_rx = self.summary_broadcast_tx.subscribe();
+        let output_stream = BroadcastStream::new(summary_broadcast_rx)
+            .map(|summary| summary.map_err(|_| Status::internal("summary broadcast error")));
         Ok(Response::new(
             Box::pin(output_stream) as Self::BookSummaryStream
         ))
