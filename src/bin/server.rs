@@ -91,6 +91,10 @@ struct Args {
     #[arg(long, default_value = "wss://stream.binance.com:9443/ws")]
     binance_websocket_url: String,
 
+    /// Binance update interval
+    #[arg(long, default_value_t = 100)]
+    binance_update_interval: u64,
+
     /// Bitstamp symbol
     #[arg(long, default_value = "BTCUSDT")]
     bitstamp_symbol: String,
@@ -108,10 +112,17 @@ fn spawn_binance_orderbook_listener(
         let websocket_url = args.binance_websocket_url.clone();
         let symbol = args.binance_symbol.clone();
         let orderbook_depth_limit = args.orderbook_depth_limit;
+        let update_interval = args.binance_update_interval;
         async move {
-            binance_orderbook_listener(&websocket_url, &symbol, orderbook_depth_limit, tx)
-                .await
-                .context("Binance orderbook listener error")
+            binance_orderbook_listener(
+                &websocket_url,
+                &symbol,
+                update_interval,
+                orderbook_depth_limit,
+                tx,
+            )
+            .await
+            .context("Binance orderbook listener error")
         }
     })
 }

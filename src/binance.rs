@@ -17,12 +17,12 @@ pub struct BinanceBookDepth {
 pub async fn binance_orderbook_listener(
     websocket_url: &str,
     symbol: &str,
+    update_interval: u64,
     depth_limit: usize,
     tx: OrderbookUpdateSender,
 ) -> Result<()> {
     let (ws_stream, _) = connect_async(websocket_url).await?;
     let (mut ws_write, mut ws_read) = ws_stream.split();
-    let update_interval = 100; // FIXME: Make this configurable
     ws_write
         .send(Message::Text(serde_json::to_string(&json!(
         {
