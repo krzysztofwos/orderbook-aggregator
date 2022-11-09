@@ -1,18 +1,31 @@
-use crate::types::{OrderbookUpdate, Price, Quantity};
+use crate::types::{OrderbookUpdate, Price, Quote};
 
-pub type CombinedOrderbookLevel = (String, Price, Quantity);
+#[derive(Debug, Eq, PartialEq)]
+pub struct CombinedOrderbookLevel {
+    pub exchange: String,
+    pub quote: Quote,
+}
+
+impl CombinedOrderbookLevel {
+    pub fn new(exchange: String, quote: Quote) -> Self {
+        Self { exchange, quote }
+    }
+}
 
 fn update_side<F>(
     side: &mut Vec<CombinedOrderbookLevel>,
     compare: F,
     exchange: &str,
-    quotes: Vec<(Price, Quantity)>,
+    quotes: Vec<Quote>,
 ) where
     F: FnMut(&CombinedOrderbookLevel, &CombinedOrderbookLevel) -> std::cmp::Ordering,
 {
-    side.retain(|(level_exchange, _, _)| level_exchange != exchange);
-    quotes.into_iter().for_each(|(price, quantity)| {
-        side.push((exchange.to_string(), price, quantity));
+    side.retain(|level| level.exchange != exchange);
+    quotes.into_iter().for_each(|quote| {
+        side.push(CombinedOrderbookLevel {
+            exchange: exchange.to_string(),
+            quote,
+        });
     });
     side.sort_unstable_by(compare);
 }
@@ -34,11 +47,11 @@ impl CombinedOrderbook {
         }
     }
 
-    pub fn bids(&self) -> &[(String, Price, Quantity)] {
+    pub fn bids(&self) -> &[CombinedOrderbookLevel] {
         &self.bids[..self.orderbook_depth_limit]
     }
 
-    pub fn asks(&self) -> &[(String, Price, Quantity)] {
+    pub fn asks(&self) -> &[CombinedOrderbookLevel] {
         &self.asks[..self.orderbook_depth_limit]
     }
 
@@ -47,14 +60,14 @@ impl CombinedOrderbook {
         update_side(
             &mut self.bids,
             // FIXME: Sort by (price, quanity) descending
-            |lhs, rhs| rhs.1.cmp(&lhs.1), // Highest bid first
+            |lhs, rhs| rhs.quote.price.cmp(&lhs.quote.price), // Highest bid first
             &exchange,
             bids,
         );
         update_side(
             &mut self.asks,
             // FIXME: Sort by price ascending, quantity descending
-            |lhs, rhs| lhs.1.cmp(&rhs.1), // Lowest ask first
+            |lhs, rhs| lhs.quote.price.cmp(&rhs.quote.price), // Lowest ask first
             &exchange,
             asks,
         );
@@ -65,7 +78,7 @@ impl CombinedOrderbook {
         self.spread = if self.bids.is_empty() || self.asks.is_empty() {
             None
         } else {
-            Some(self.asks[0].1 - self.bids[0].1)
+            Some(self.asks[0].quote.price - self.bids[0].quote.price)
         }
     }
 
@@ -83,24 +96,54 @@ mod tests {
     #[test]
     fn update_best_bid() {
         let mut combined_orderbook = CombinedOrderbook::new(1);
-        combined_orderbook.update(("binance".to_string(), vec![(dec!(90), dec!(100))], vec![]));
-        combined_orderbook.update(("bitstamp".to_string(), vec![(dec!(89), dec!(100))], vec![]));
-        combined_orderbook.update(("binance".to_string(), vec![(dec!(87), dec!(100))], vec![]));
+        combined_orderbook.update((
+            "binance".to_string(),
+            vec![Quote::new(dec!(90), dec!(100))],
+            vec![],
+        ));
+        combined_orderbook.update((
+            "bitstamp".to_string(),
+            vec![Quote::new(dec!(89), dec!(100))],
+            vec![],
+        ));
+        combined_orderbook.update((
+            "binance".to_string(),
+            vec![Quote::new(dec!(87), dec!(100))],
+            vec![],
+        ));
         assert_eq!(
             combined_orderbook.bids(),
-            [("bitstamp".to_string(), dec!(89), dec!(100))]
+            [CombinedOrderbookLevel::new(
+                "bitstamp".to_string(),
+                Quote::new(dec!(89), dec!(100))
+            )]
         );
     }
 
     #[test]
     fn update_best_ask() {
         let mut combined_orderbook = CombinedOrderbook::new(1);
-        combined_orderbook.update(("binance".to_string(), vec![], vec![(dec!(90), dec!(100))]));
-        combined_orderbook.update(("bitstamp".to_string(), vec![], vec![(dec!(91), dec!(100))]));
-        combined_orderbook.update(("binance".to_string(), vec![], vec![(dec!(92), dec!(100))]));
+        combined_orderbook.update((
+            "binance".to_string(),
+            vec![],
+            vec![Quote::new(dec!(90), dec!(100))],
+        ));
+        combined_orderbook.update((
+            "bitstamp".to_string(),
+            vec![],
+            vec![Quote::new(dec!(91), dec!(100))],
+        ));
+        combined_orderbook.update((
+            "binance".to_string(),
+            vec![],
+            vec![Quote::new(dec!(92), dec!(100))],
+        ));
         assert_eq!(
             combined_orderbook.asks(),
-            [("bitstamp".to_string(), dec!(91), dec!(100))]
+            [CombinedOrderbookLevel::new(
+                "bitstamp".to_string(),
+                Quote::new(dec!(91), dec!(100))
+            )]
         );
     }
 }

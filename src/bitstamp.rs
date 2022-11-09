@@ -83,7 +83,7 @@ mod tests {
             serde_json::from_str(json);
         assert!(event.is_ok());
         let data = event.unwrap().data;
-        assert_eq!(data.bids, vec![(dec!(19176.0), dec!(0.39108459))]);
-        assert_eq!(data.asks, vec![(dec!(19181.0), dec!(0.31188246))]);
+        assert_eq!(data.bids, vec![Quote::new(dec!(19176.0), dec!(0.39108459))]);
+        assert_eq!(data.asks, vec![Quote::new(dec!(19181.0), dec!(0.31188246))]);
     }
 }

@@ -130,15 +130,16 @@ fn spawn_bitstamp_orderbook_listener(
 }
 
 fn to_level(combined_orderbook_level: &CombinedOrderbookLevel) -> Result<Level> {
-    let (exchange, price, amount) = combined_orderbook_level;
+    let price = combined_orderbook_level.quote.price;
+    let quantity = combined_orderbook_level.quote.quantity;
     Ok(Level {
-        exchange: exchange.clone(),
+        exchange: combined_orderbook_level.exchange.clone(),
         price: price
             .to_f64()
             .ok_or_else(|| anyhow!("value '{}' cannot be represented by an f64", price))?,
-        amount: amount
+        amount: quantity
             .to_f64()
-            .ok_or_else(|| anyhow!("value '{}' cannot be represented by an f64", amount))?,
+            .ok_or_else(|| anyhow!("value '{}' cannot be represented by an f64", quantity))?,
     })
 }
 

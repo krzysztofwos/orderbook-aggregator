@@ -70,11 +70,11 @@ mod tests {
         let book_depth = book_depth.unwrap();
         assert_eq!(
             book_depth.bids,
-            vec![(dec!(19255.06000000), dec!(0.10000000))]
+            vec![Quote::new(dec!(19255.06000000), dec!(0.10000000))]
         );
         assert_eq!(
             book_depth.asks,
-            vec![(dec!(19255.30000000), dec!(0.00055000))]
+            vec![Quote::new(dec!(19255.30000000), dec!(0.00055000))]
         );
     }
 }
