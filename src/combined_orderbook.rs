@@ -46,12 +46,14 @@ impl CombinedOrderbook {
         let (exchange, bids, asks) = orderbook_update;
         update_side(
             &mut self.bids,
+            // FIXME: Sort by (price, quanity) descending
             |lhs, rhs| rhs.1.partial_cmp(&lhs.1).unwrap(), // Highest bid first
             &exchange,
             bids,
         );
         update_side(
             &mut self.asks,
+            // FIXME: Sort by price ascending, quantity descending
             |lhs, rhs| lhs.1.partial_cmp(&rhs.1).unwrap(), // Lowest ask first
             &exchange,
             asks,
