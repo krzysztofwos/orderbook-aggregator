@@ -3,7 +3,7 @@ use crate::types::{OrderbookUpdate, Price, Quantity};
 pub type CombinedOrderbookLevel = (String, Price, Quantity);
 
 fn update_side<F>(
-    side: &mut Vec<(String, Price, Quantity)>,
+    side: &mut Vec<CombinedOrderbookLevel>,
     compare: F,
     exchange: &str,
     quotes: Vec<(Price, Quantity)>,
