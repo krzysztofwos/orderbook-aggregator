@@ -59,15 +59,17 @@ impl CombinedOrderbook {
         let (exchange, bids, asks) = orderbook_update;
         update_side(
             &mut self.bids,
-            // FIXME: Sort by (price, quanity) descending
-            |lhs, rhs| rhs.quote.price.cmp(&lhs.quote.price), // Highest bid first
+            |lhs, rhs| {
+                (rhs.quote.price, rhs.quote.quantity).cmp(&(lhs.quote.price, lhs.quote.quantity))
+            }, // Highest bid, highest quantity first
             &exchange,
             bids,
         );
         update_side(
             &mut self.asks,
-            // FIXME: Sort by price ascending, quantity descending
-            |lhs, rhs| lhs.quote.price.cmp(&rhs.quote.price), // Lowest ask first
+            |lhs, rhs| {
+                (lhs.quote.price, rhs.quote.quantity).cmp(&(rhs.quote.price, lhs.quote.quantity))
+            }, // Lowest ask, highest quantity first
             &exchange,
             asks,
         );
@@ -143,6 +145,28 @@ mod tests {
             [CombinedOrderbookLevel::new(
                 "bitstamp".to_string(),
                 Quote::new(dec!(91), dec!(100))
+            )]
+        );
+    }
+
+    #[test]
+    fn multiple_quotes_at_price_ordered_by_higest_quantity() {
+        let mut combined_orderbook = CombinedOrderbook::new(1);
+        combined_orderbook.update((
+            "binance".to_string(),
+            vec![],
+            vec![Quote::new(dec!(90), dec!(100))],
+        ));
+        combined_orderbook.update((
+            "bitstamp".to_string(),
+            vec![],
+            vec![Quote::new(dec!(90), dec!(200))],
+        ));
+        assert_eq!(
+            combined_orderbook.asks(),
+            [CombinedOrderbookLevel::new(
+                "bitstamp".to_string(),
+                Quote::new(dec!(90), dec!(200))
             )]
         );
     }
